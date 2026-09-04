@@ -1,4 +1,3 @@
-from http.server import BaseHTTPRequestHandler
 import json
 import os
 import requests
@@ -16,17 +15,29 @@ def chat_with_groq(message):
         "model": "llama3-8b-8192",
         "messages": [{"role": "user", "content": message}]
     }
-    response = requests.post(url, headers=headers, json=data)
-    return response.json()["choices"][0]["message"]["content"]
+    try:
+        response = requests.post(url, headers=headers, json=data, timeout=10)
+        result = response.json()
+        return result["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 def send_message(chat_id, text):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": chat_id, "text": text})
+    try:
+        requests.post(url, json={"chat_id": chat_id, "text": text}, timeout=10)
+    except:
+        pass
 
-class handler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        length = int(self.headers.get('Content-Length', 0))
-        data = json.loads(self.rfile.read(length))
+def handler(request):
+    if request.method == "GET":
+        return {"statusCode": 200, "body": "Bot is running"}
+    
+    try:
+        body = request.body
+        if isinstance(body, bytes):
+            body = body.decode("utf-8")
+        data = json.loads(body)
         
         if "message" in data and "text" in data["message"]:
             chat_id = data["message"]["chat"]["id"]
@@ -34,11 +45,7 @@ class handler(BaseHTTPRequestHandler):
             reply = chat_with_groq(text)
             send_message(chat_id, reply)
         
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b'OK')
-    
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b'Bot is running')
+        return {"statusCode": 200, "body": "OK"}
+    except Exception as e:
+        return {"statusCode": 200, "body": f"Error: {str(e)}"}
+
